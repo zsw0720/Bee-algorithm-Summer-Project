@@ -59,6 +59,39 @@ def evaluate_vlm_accuracy(gt_mask_path, predicted_boxes, image_shape=(600, 800))
     iou = intersection / union if union > 0 else 1.0
     f1_score = 2.0 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
+    # 3b. Calculate Box-level IoU (Standard Object Detection metric)
+    box_iou = 0.0
+    y_indices, x_indices = np.where(gt_mask)
+    if len(x_indices) > 0 and len(y_indices) > 0 and predicted_boxes:
+        gt_box = [float(np.min(x_indices)), float(np.min(y_indices)), float(np.max(x_indices)), float(np.max(y_indices))]
+        
+        # Merge all predicted boxes into one bounding box for union assessment
+        pred_x_min = min([box[0] for box in predicted_boxes])
+        pred_y_min = min([box[1] for box in predicted_boxes])
+        pred_x_max = max([box[2] for box in predicted_boxes])
+        pred_y_max = max([box[3] for box in predicted_boxes])
+        pred_box = [pred_x_min, pred_y_min, pred_x_max, pred_y_max]
+        
+        # Compute Box Intersection
+        ix_min = max(gt_box[0], pred_box[0])
+        iy_min = max(gt_box[1], pred_box[1])
+        ix_max = min(gt_box[2], pred_box[2])
+        iy_max = min(gt_box[3], pred_box[3])
+        
+        iw = max(0.0, ix_max - ix_min)
+        ih = max(0.0, iy_max - iy_min)
+        box_intersection = iw * ih
+        
+        # Compute Box Areas and Union
+        area_gt = (gt_box[2] - gt_box[0]) * (gt_box[3] - gt_box[1])
+        area_pred = (pred_box[2] - pred_box[0]) * (pred_box[3] - pred_box[1])
+        box_union = area_gt + area_pred - box_intersection
+        
+        box_iou = box_intersection / box_union if box_union > 0 else 0.0
+        print(f"Box-Level Overlap: GT Box={gt_box}, Pred Box={pred_box}, Box IoU={box_iou*100:.2f}%")
+    else:
+        print("Could not compute Box-level IoU (either no GT pixels or no predicted boxes).")
+
     print("\n--- Accuracy Evaluation Report ---")
     print(f"Pixel Counts:")
     print(f"  - True Positives (Correct): {int(TP)} px")
@@ -67,16 +100,12 @@ def evaluate_vlm_accuracy(gt_mask_path, predicted_boxes, image_shape=(600, 800))
     print(f"Evaluation Metrics:")
     print(f"  - Precision (Precision Rate): {precision:.4f} ({precision*100:.2f}%)")
     print(f"  - Recall (Detection Rate):    {recall:.4f} ({recall*100:.2f}%)")
-    print(f"  - Intersection over Union:     {iou:.4f} ({iou*100:.2f}%)")
+    print(f"  - Pixel-level IoU:            {iou:.4f} ({iou*100:.2f}%)")
+    print(f"  - Box-level IoU:              {box_iou:.4f} ({box_iou*100:.2f}%)")
     print(f"  - F1-Score (Dice Coefficient): {f1_score:.4f} ({f1_score*100:.2f}%)")
     print("-----------------------------------")
 
     # 4. Generate Visual Overlay Plot
-    # We create a visualization matrix where:
-    # Black: Background (0,0,0)
-    # Green: Correct Detections (True Positives)
-    # Red: False Alarms (False Positives)
-    # Blue: Missed Defects (False Negatives)
     viz_img = np.zeros((height, width, 3), dtype=np.uint8)
     viz_img[TP_mask] = [0, 220, 0]    # Green
     viz_img[FP_mask] = [220, 0, 0]    # Red
@@ -102,10 +131,11 @@ def evaluate_vlm_accuracy(gt_mask_path, predicted_boxes, image_shape=(600, 800))
 
     # Add text box with metrics
     metric_text = (
-        f"IoU: {iou*100:.2f}%\n"
-        f"F1-Score: {f1_score*100:.2f}%\n"
-        f"Precision: {precision*100:.2f}%\n"
-        f"Recall: {recall*100:.2f}%"
+        f"Pixel IoU: {iou*100:.1f}%\n"
+        f"Box IoU: {box_iou*100:.1f}%\n"
+        f"F1-Score: {f1_score*100:.1f}%\n"
+        f"Precision: {precision*100:.1f}%\n"
+        f"Recall: {recall*100:.1f}%"
     )
     props = dict(boxstyle='round', facecolor='white', alpha=0.9, edgecolor='gray')
     ax3.text(10, height - 10, metric_text, fontsize=9,
@@ -115,10 +145,11 @@ def evaluate_vlm_accuracy(gt_mask_path, predicted_boxes, image_shape=(600, 800))
     plot_path = "d:/Summer Project/ndt_evaluation_result.png"
     plt.savefig(plot_path, dpi=300)
     print(f"Visual evaluation comparison saved to '{plot_path}'")
-    plt.show()
+    plt.close('all') # Make sure we close plot to avoid thread warning/leaks
 
     return {
         "iou": iou,
+        "box_iou": box_iou,
         "f1_score": f1_score,
         "precision": precision,
         "recall": recall

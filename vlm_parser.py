@@ -225,55 +225,76 @@ def parse_image_local(image_path, user_prompt=None):
 
 def parse_image_gemini(image_path, user_prompt=None):
     """
-    Calls Google Gemini 1.5 API with image input to detect welds and obstacles in pixel space.
+    Calls Google Gemini API with image input to detect defects and obstacles.
+    Uses normalized coordinates [0, 1000] for maximum precision.
     """
     if not config.GEMINI_API_KEY:
         print("[Warning] GEMINI_API_KEY is not configured. Fallback to Local Mock.")
         return parse_image_local(image_path, user_prompt)
 
+    # Try importing new google-genai library, then fallback to old google-generativeai
+    use_new_sdk = True
     try:
-        import google.generativeai as genai
+        from google import genai
         from PIL import Image
     except ImportError:
-        print("[Warning] 'google-generativeai' or 'Pillow' is not installed. Fallback to Local Mock.")
-        print("Install them using: pip install google-generativeai pillow")
+        try:
+            import google.generativeai as genai
+            from PIL import Image
+            use_new_sdk = False
+        except ImportError:
+            print("[Warning] Neither 'google-genai' nor 'google-generativeai' is installed. Fallback to Local Mock.")
+            return parse_image_local(image_path, user_prompt)
+
+    try:
+        print(f"[VLM Gemini] Loading and inspecting image dimensions...")
+        img = Image.open(image_path)
+        img_w, img_h = img.size
+    except Exception as e:
+        print(f"[Error] Failed to open image: {e}. Fallback to Local Mock.")
         return parse_image_local(image_path, user_prompt)
 
-    # Configure Gemini API
-    genai.configure(api_key=config.GEMINI_API_KEY)
-    
+    # Normalized [0, 1000] scale coordinates are much more accurate for VLM grounding tasks
     prompt = f"""
     You are an AI vision system for an industrial NDT inspection robot.
-    Your task is to inspect the provided image of a metal workpiece and extract:
-    1. SUSPECTED DEFECTS OR WELD SEAMS: Locate points (waypoints) along any weld seams, cracks, joints, or high-risk defect areas that require inspection.
-       For each identified defect or seam, output 3 to 5 waypoints from one end to the other along its centerline.
-    2. SUSPECTED DEFECT/WELD ZONE BOXES: Draw bounding boxes around each full weld seam or defect zone.
-    3. OBSTACLES: Locate any obstacles (like safety valves, handles, holes, protrusions, or clamp structures) in the image that the robotic arm must avoid.
+    Your task is to inspect the provided image of a metal workpiece and locate any welds, cracks, scratches, defects, or joints.
     
-    Output coordinates strictly in the image pixel space:
-    - Image width is {config.IMAGE_WIDTH} (u axis, left-to-right, 0 to {config.IMAGE_WIDTH}) and height is {config.IMAGE_HEIGHT} (v axis, top-to-bottom, 0 to {config.IMAGE_HEIGHT}).
-    - Represent obstacles and defect zone boxes as bounding boxes [u_min, v_min, u_max, v_max].
-    - Represent target inspection waypoints as center coordinate points [u, v].
+    Please output coordinates normalized to a [0, 1000] scale, where:
+    - 0 represents the top/left edge.
+    - 1000 represents the bottom/right edge.
+    - The coordinate format is: [ymin, xmin, ymax, xmax] for bounding boxes (where ymin, xmin, ymax, xmax are normalized from 0 to 1000), and [x, y] for points.
+
+    Please extract:
+    1. SUSPECTED DEFECTS OR CRACKS (targets): Waypoints along the centerline of the defects. Output 3 to 5 waypoints from one end of the defect/weld to the other.
+    2. SUSPECTED DEFECT ZONE BOXES (weld_boxes): Bounding boxes around each full weld seam or defect zone.
+    3. OBSTACLES (obstacles): Obstacles to avoid (like safety valves, center holes, clamp structures, or fasteners).
 
     You must output a strictly valid JSON object with the following keys. Do NOT include markdown fences, comments, or conversational text.
     {{
-      "targets": [[u1, v1], [u2, v2], ...],  // 2D pixel coordinates of target inspection points
-      "target_names": ["Weld 1 Point 1", "Weld 1 Point 2", ...], // Friendly descriptive names
-      "weld_boxes": [[u_min, v_min, u_max, v_max], ...], // Bounding boxes of the defect/weld zones
-      "obstacles": [[u_min, v_min, u_max, v_max], ...] // Obstacle bounding boxes in pixels
+      "targets": [[x1, y1], [x2, y2], ...],  // normalized [0, 1000] coordinates of target inspection points
+      "target_names": ["Defect Point 1", "Defect Point 2", ...],
+      "weld_boxes": [[ymin, xmin, ymax, xmax], ...], // normalized [0, 1000] bounding boxes of defect/weld zones
+      "obstacles": [[ymin, xmin, ymax, xmax], ...] // normalized [0, 1000] bounding boxes of obstacles
     }}
     """
     if user_prompt:
         prompt += f"\n\nUSER DIRECTIVE: Inspect only according to this natural language request: '{user_prompt}'."
 
     try:
-        print(f"[VLM Gemini] Sending image '{image_path}' to Gemini API ({config.GEMINI_MODEL})...")
-        img = Image.open(image_path)
+        print(f"[VLM Gemini] Sending image '{image_path}' to Gemini API ({config.GEMINI_MODEL}) using {'new SDK' if use_new_sdk else 'deprecated SDK'}...")
         
-        # Load model and run inference
-        model = genai.GenerativeModel(config.GEMINI_MODEL)
-        response = model.generate_content([prompt, img])
-        response_text = response.text.strip()
+        if use_new_sdk:
+            client = genai.Client(api_key=config.GEMINI_API_KEY)
+            response = client.models.generate_content(
+                model=config.GEMINI_MODEL,
+                contents=[img, prompt]
+            )
+            response_text = response.text.strip()
+        else:
+            genai.configure(api_key=config.GEMINI_API_KEY)
+            model = genai.GenerativeModel(config.GEMINI_MODEL)
+            response = model.generate_content([prompt, img])
+            response_text = response.text.strip()
         
         # Clean markdown fences
         if response_text.startswith("```"):
@@ -282,8 +303,40 @@ def parse_image_gemini(image_path, user_prompt=None):
             response_text = re.sub(r"\s*```$", "", response_text)
             
         data = json.loads(response_text)
-        print("[VLM Gemini] Successfully received and parsed image analysis.")
-        return data
+        print("[VLM Gemini] Successfully received image analysis. Mapping coordinates back to pixel space...")
+        
+        # Map normalized coords [0, 1000] back to image pixel space
+        pixel_targets = []
+        for pt in data.get("targets", []):
+            px_x = float(pt[0] * img_w / 1000.0)
+            px_y = float(pt[1] * img_h / 1000.0)
+            pixel_targets.append([px_x, px_y])
+            
+        pixel_weld_boxes = []
+        for box in data.get("weld_boxes", []):
+            ymin, xmin, ymax, xmax = box
+            px_xmin = float(xmin * img_w / 1000.0)
+            px_ymin = float(ymin * img_h / 1000.0)
+            px_xmax = float(xmax * img_w / 1000.0)
+            px_ymax = float(ymax * img_h / 1000.0)
+            pixel_weld_boxes.append([px_xmin, px_ymin, px_xmax, px_ymax])
+            
+        pixel_obstacles = []
+        for obs in data.get("obstacles", []):
+            ymin, xmin, ymax, xmax = obs
+            px_xmin = float(xmin * img_w / 1000.0)
+            px_ymin = float(ymin * img_h / 1000.0)
+            px_xmax = float(xmax * img_w / 1000.0)
+            px_ymax = float(ymax * img_h / 1000.0)
+            pixel_obstacles.append([px_xmin, px_ymin, px_xmax, px_ymax])
+            
+        return {
+            "targets": pixel_targets,
+            "target_names": data.get("target_names", [f"Target Point {i+1}" for i in range(len(pixel_targets))]),
+            "weld_boxes": pixel_weld_boxes,
+            "obstacles": pixel_obstacles
+        }
+        
     except Exception as e:
         print(f"[Error] Gemini VLM analysis failed: {e}. Fallback to Local Mock.")
         return parse_image_local(image_path, user_prompt)

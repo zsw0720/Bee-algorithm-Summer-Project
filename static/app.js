@@ -200,6 +200,8 @@ function updateMetrics(metrics) {
     const noGtWarning = document.getElementById('no-gt-warning');
     const circleIoU = document.getElementById('circle-iou');
     const textIoU = document.getElementById('metric-iou-text');
+    const circleBoxIoU = document.getElementById('circle-box-iou');
+    const textBoxIoU = document.getElementById('metric-box-iou-text');
     const circleF1 = document.getElementById('circle-f1');
     const textF1 = document.getElementById('metric-f1-text');
     const textPrecision = document.getElementById('metric-precision');
@@ -210,6 +212,8 @@ function updateMetrics(metrics) {
         // Reset meters
         circleIoU.setAttribute('stroke-dasharray', '0, 100');
         textIoU.textContent = '-';
+        circleBoxIoU.setAttribute('stroke-dasharray', '0, 100');
+        textBoxIoU.textContent = '-';
         circleF1.setAttribute('stroke-dasharray', '0, 100');
         textF1.textContent = '-';
         textPrecision.textContent = '-';
@@ -221,10 +225,14 @@ function updateMetrics(metrics) {
     
     // Set animations and stroke dasharrays (value between 0 and 100)
     const iouPercent = Math.round(metrics.iou * 100);
+    const boxIouPercent = Math.round((metrics.box_iou || 0) * 100);
     const f1Percent = Math.round(metrics.f1_score * 100);
     
     circleIoU.setAttribute('stroke-dasharray', `${iouPercent}, 100`);
     textIoU.textContent = `${iouPercent}%`;
+    
+    circleBoxIoU.setAttribute('stroke-dasharray', `${boxIouPercent}, 100`);
+    textBoxIoU.textContent = `${boxIouPercent}%`;
     
     circleF1.setAttribute('stroke-dasharray', `${f1Percent}, 100`);
     textF1.textContent = `${f1Percent}%`;
@@ -232,7 +240,7 @@ function updateMetrics(metrics) {
     textPrecision.textContent = `${Math.round(metrics.precision * 100)}%`;
     textRecall.textContent = `${Math.round(metrics.recall * 100)}%`;
 
-    logToConsole(`VLM defect evaluation accuracy: IoU = ${iouPercent}%, F1 = ${f1Percent}%`, 'success');
+    logToConsole(`VLM defect evaluation accuracy: Pixel IoU = ${iouPercent}%, Box IoU = ${boxIouPercent}%, F1 = ${f1Percent}%`, 'success');
 }
 
 // 4. API - Run Path Optimization (Bees Algorithm)
