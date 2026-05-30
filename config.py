@@ -2,6 +2,16 @@
 
 import os
 
+# Load environment variables from .env file if it exists
+env_path = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.exists(env_path):
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                os.environ[key.strip()] = val.strip()
+
 # ==========================================
 # 1. Physical Environment & NDT Settings
 # ==========================================
@@ -55,7 +65,7 @@ BA_WAYPOINTS_COUNT = 3  # Number of intermediate waypoints to optimize for each 
 # 3. LLM Configuration
 # ==========================================
 # "local" for offline mock parsing, "gemini" for online Google Gemini API
-LLM_MODE = "local" 
+LLM_MODE = "gemini" 
 
 # Gemini API settings
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
