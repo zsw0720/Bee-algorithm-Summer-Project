@@ -1,0 +1,5 @@
+*.pyc
+bees_algorithm.egg-info
+build
+dist
+stopwatch.py

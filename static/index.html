@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLM-Guided Bees Algorithm NDT System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Chart.js for Convergence Curves -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <div class="logo">
+                <i class="fa-solid fa-microchip neon-glow-icon"></i>
+                <h1>NDT Path Planning <span>Web Dashboard</span></h1>
+            </div>
+            <div class="status-badge">
+                <span class="pulse-dot green"></span>
+                <span>System Online (Localhost)</span>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <!-- SIDEBAR CONTROL PANEL -->
+            <aside class="sidebar glass-card">
+                <h2><i class="fa-solid fa-sliders"></i> System Parameters</h2>
+                
+                <!-- Section 1: Image & VLM Input -->
+                <div class="control-section">
+                    <h3><i class="fa-solid fa-image"></i> 1. Image & Visual Model</h3>
+                    <div class="upload-area" id="drop-zone">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <p>Drag & Drop Workpiece Photo</p>
+                        <span>or click to browse files</span>
+                        <input type="file" id="file-input" accept="image/*" style="display: none;">
+                    </div>
+                    <div id="file-name-display" class="file-name-info" style="display:none;">
+                        <i class="fa-solid fa-file-image"></i> <span id="file-name-text">None</span>
+                    </div>
+
+                    <!-- Ground truth option -->
+                    <div class="gt-upload-container">
+                        <label for="gt-input" class="gt-label">
+                            <i class="fa-solid fa-mask"></i> Upload Ground Truth Mask (Optional)
+                        </label>
+                        <input type="file" id="gt-input" accept="image/*">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vlm-mode">VLM Inspection Mode:</label>
+                        <select id="vlm-mode">
+                            <option value="local">Offline Dynamic CV Detector</option>
+                            <option value="gemini">Google Gemini 1.5 API</option>
+                        </select>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button id="btn-inspect" class="btn-primary"><i class="fa-solid fa-eye"></i> Run Visual Detection</button>
+                        <button id="btn-default-inspect" class="btn-secondary"><i class="fa-solid fa-images"></i> Load Default Plate</button>
+                    </div>
+                </div>
+
+                <!-- Section 2: Coordinates -->
+                <div class="control-section">
+                    <h3><i class="fa-solid fa-location-crosshairs"></i> 2. Scanner Coordinates (mm)</h3>
+                    <div class="coord-grid">
+                        <div class="form-group">
+                            <label>Start X:</label>
+                            <input type="number" id="start-x" value="5.0" step="0.5" min="0" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Start Y:</label>
+                            <input type="number" id="start-y" value="5.0" step="0.5" min="0" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>End X:</label>
+                            <input type="number" id="end-x" value="95.0" step="0.5" min="0" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>End Y:</label>
+                            <input type="number" id="end-y" value="5.0" step="0.5" min="0" max="100">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Bees Algorithm Tuning -->
+                <div class="control-section">
+                    <h3><i class="fa-solid fa-hive"></i> 3. Bees Algorithm Parameters</h3>
+                    
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <span>Scout Bees (n):</span>
+                            <span id="val-n" class="slider-val">40</span>
+                        </div>
+                        <input type="range" id="param-n" min="10" max="100" value="40" step="5">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <span>Selected Sites (m):</span>
+                            <span id="val-m" class="slider-val">15</span>
+                        </div>
+                        <input type="range" id="param-m" min="5" max="30" value="15" step="1">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <span>Elite Sites (e):</span>
+                            <span id="val-e" class="slider-val">5</span>
+                        </div>
+                        <input type="range" id="param-e" min="1" max="10" value="5" step="1">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <span>Elite Recruits (nep):</span>
+                            <span id="val-nep" class="slider-val">25</span>
+                        </div>
+                        <input type="range" id="param-nep" min="5" max="50" value="25" step="5">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <span>Selected Recruits (nsp):</span>
+                            <span id="val-nsp" class="slider-val">12</span>
+                        </div>
+                        <input type="range" id="param-nsp" min="2" max="30" value="12" step="2">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <span>Max Iterations:</span>
+                            <span id="val-max-it" class="slider-val">80</span>
+                        </div>
+                        <input type="range" id="param-max-it" min="20" max="200" value="80" step="10">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <span>Segment Waypoints (M):</span>
+                            <span id="val-waypoints" class="slider-val">3</span>
+                        </div>
+                        <input type="range" id="param-waypoints" min="1" max="6" value="3" step="1">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <span>Search Size (ngh):</span>
+                            <span id="val-ngh" class="slider-val">8.0</span>
+                        </div>
+                        <input type="range" id="param-ngh" min="1.0" max="15.0" value="8.0" step="0.5">
+                    </div>
+                </div>
+
+                <!-- Run planning button -->
+                <button id="btn-plan" class="btn-success" disabled><i class="fa-solid fa-play"></i> Run Path Optimization</button>
+            </aside>
+
+            <!-- WORKSPACE PANEL -->
+            <main class="workspace">
+                <!-- TOP WORKSPACE ROW: Visual Canvas & Metrics -->
+                <div class="workspace-row">
+                    <!-- Left: Interactive Live Canvas -->
+                    <div class="canvas-card glass-card">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-circle-dot animate-pulse"></i> NDT Scanning Live Visualization</h2>
+                            <div class="canvas-legend">
+                                <span class="legend-item"><span class="dot target"></span>Waypoint</span>
+                                <span class="legend-item"><span class="dot path"></span>Path</span>
+                                <span class="legend-item"><span class="dot obstacle"></span>Obstacle</span>
+                                <span class="legend-item"><span class="dot probe"></span>Probe</span>
+                            </div>
+                        </div>
+                        <div class="canvas-container">
+                            <canvas id="ndt-canvas" width="1024" height="1024"></canvas>
+                        </div>
+                        <div class="animation-controls">
+                            <button id="btn-anim-play" class="btn-icon"><i class="fa-solid fa-play"></i></button>
+                            <button id="btn-anim-pause" class="btn-icon"><i class="fa-solid fa-pause"></i></button>
+                            <button id="btn-anim-reset" class="btn-icon"><i class="fa-solid fa-rotate-left"></i></button>
+                            <span class="anim-speed-label">Speed:</span>
+                            <input type="range" id="anim-speed" min="1" max="10" value="5">
+                        </div>
+                    </div>
+
+                    <!-- Right: Defect Metrics card -->
+                    <div class="metrics-card glass-card">
+                        <h2><i class="fa-solid fa-chart-simple"></i> Defect Detection Accuracy</h2>
+                        <div class="metrics-grid">
+                            <div class="metric-box">
+                                <div class="metric-circle-container">
+                                    <svg viewBox="0 0 36 36" class="circular-chart">
+                                        <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                        <path class="circle" stroke-dasharray="0, 100" id="circle-iou" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    </svg>
+                                    <span class="metric-val" id="metric-iou-text">-</span>
+                                </div>
+                                <span class="metric-label">Intersection over Union (IoU)</span>
+                            </div>
+                            
+                            <div class="metric-box">
+                                <div class="metric-circle-container">
+                                    <svg viewBox="0 0 36 36" class="circular-chart">
+                                        <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                        <path class="circle" stroke-dasharray="0, 100" id="circle-f1" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    </svg>
+                                    <span class="metric-val" id="metric-f1-text">-</span>
+                                </div>
+                                <span class="metric-label">F1-Score (Dice)</span>
+                            </div>
+
+                            <div class="metric-box mini">
+                                <span class="mini-val" id="metric-precision">-</span>
+                                <span class="mini-label">Precision</span>
+                            </div>
+                            <div class="metric-box mini">
+                                <span class="mini-val" id="metric-recall">-</span>
+                                <span class="mini-label">Recall</span>
+                            </div>
+                        </div>
+                        <div id="no-gt-warning" class="gt-notice">
+                            <i class="fa-solid fa-circle-info"></i> Upload a Ground Truth mask to trigger evaluation.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOTTOM WORKSPACE ROW: Trajectory Length & Convergence -->
+                <div class="workspace-row">
+                    <!-- Left: Planning summary & details -->
+                    <div class="summary-card glass-card">
+                        <h2><i class="fa-solid fa-clipboard-list"></i> Trajectory Summary</h2>
+                        <div class="summary-info-box">
+                            <div class="info-item">
+                                <span class="label">Total Path Length:</span>
+                                <span class="value" id="summary-length">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">Safety Status:</span>
+                                <span class="value badge" id="summary-status">-</span>
+                            </div>
+                        </div>
+                        
+                        <div class="console-box" id="console-logs">
+                            <div class="log-line system"><i class="fa-solid fa-chevron-right"></i> NDT System initialized. Ready to inspect.</div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Convergence plot -->
+                    <div class="chart-card glass-card">
+                        <h2><i class="fa-solid fa-chart-line"></i> Optimization Convergence</h2>
+                        <div class="chart-container">
+                            <canvas id="convergenceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Script file -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Web App uploads & generated results
+uploads/
+ndt_latest_run_result.png
+ndt_evaluation_result.png
+ndt_simulation_mockup.png
+metal_plate_gt.png
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo

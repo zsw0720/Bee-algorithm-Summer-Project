@@ -1,0 +1,20 @@
+cache:
+ paths:
+  - ~/.cache/pip/
+
+before_script:
+ - pip3 install -r requirements.txt
+ - pip3 install scipy benchmark_functions
+ - pip3 install computational_stopwatch
+
+test_vanilla_ba:
+  stage: test
+  image: python:3.6
+  script:
+    - python3 utests.py TestBeesAlgorithm
+
+test_parallel_ba:
+  stage: test
+  image: python:3.6
+  script:
+    - python3 utests.py TestParallelBeesAlgorithm
