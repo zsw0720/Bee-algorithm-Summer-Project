@@ -94,7 +94,8 @@ def inspect_image():
     config.LLM_MODE = 'gemini' if vlm_mode == 'gemini' else 'local'
 
     # Step 1: Parse features
-    parsed_data = parse_image(filepath)
+    user_prompt = request.form.get('user_prompt', '')
+    parsed_data = parse_image(filepath, user_prompt=user_prompt)
     pixel_targets = parsed_data.get("targets", [])
     target_names = parsed_data.get("target_names", [])
     weld_boxes = parsed_data.get("weld_boxes", [])

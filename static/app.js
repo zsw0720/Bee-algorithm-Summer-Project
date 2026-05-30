@@ -146,6 +146,7 @@ function runVisualDetection(useDefault = false) {
         formData.append('use_default', 'true');
     }
     formData.append('vlm_mode', vlmModeSelect.value);
+    formData.append('user_prompt', document.getElementById('user-prompt').value.trim());
 
     // Disable buttons during load
     btnInspect.disabled = true;

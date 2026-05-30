@@ -271,7 +271,7 @@ header {
     color: var(--text-secondary);
 }
 
-.form-group select, .form-group input {
+.form-group select, .form-group input, .form-group textarea {
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -283,7 +283,13 @@ header {
     transition: border-color 0.3s;
 }
 
-.form-group select:focus, .form-group input:focus {
+.form-group textarea {
+    height: 60px;
+    resize: vertical;
+    font-size: 0.8rem;
+}
+
+.form-group select:focus, .form-group input:focus, .form-group textarea:focus {
     border-color: var(--neon-cyan);
 }
 

@@ -143,7 +143,7 @@ def detect_features_cv_generic(image_path):
     }
 
 
-def parse_image_local(image_path):
+def parse_image_local(image_path, user_prompt=None):
     """
     Offline mockup parser. If the target is the default 'metal_plate.png', 
     it returns the exact calibrated 100% metrics coordinates. 
@@ -169,6 +169,27 @@ def parse_image_local(image_path):
         obstacles = [
             [348.0, 338.0, 686.0, 676.0]
         ]
+        
+        # Apply simple mock keyword filtering based on user natural language instruction
+        if user_prompt:
+            up = user_prompt.lower()
+            print(f"[VLM Local Mock] Processing user mock prompt directive: '{user_prompt}'")
+            
+            # Filter welds
+            if "left" in up or "左" in up:
+                targets = [t for t in targets if "Left" in t["name"]]
+                weld_boxes = [weld_boxes[0]]
+                print("  Filtered: Kept Left Weld only.")
+            elif "right" in up or "右" in up:
+                targets = [t for t in targets if "Right" in t["name"]]
+                weld_boxes = [weld_boxes[1]]
+                print("  Filtered: Kept Right Weld only.")
+                
+            # Filter obstacles
+            if "avoid" not in up and ("no obstacle" in up or "无障碍" in up or "忽略障碍" in up or "ignore obstacle" in up):
+                obstacles = []
+                print("  Filtered: Removed obstacles.")
+                
         return {
             "targets": [t["coord"] for t in targets],
             "target_names": [t["name"] for t in targets],
@@ -181,18 +202,34 @@ def parse_image_local(image_path):
         if result is None or not result["targets"]:
             # Fallback in case CV fails completely
             print("[Warning] Dynamic CV detection returned no targets. Using default coordinates fallback.")
-            return parse_image_local("metal_plate.png")
+            return parse_image_local("metal_plate.png", user_prompt)
+        
+        # Apply same simple mock filtering to dynamic CV results for testing
+        if user_prompt:
+            up = user_prompt.lower()
+            if "left" in up or "左" in up:
+                result["targets"] = result["targets"][:3]
+                result["target_names"] = result["target_names"][:3]
+                result["weld_boxes"] = [result["weld_boxes"][0]] if result["weld_boxes"] else []
+            elif "right" in up or "右" in up:
+                result["targets"] = result["targets"][3:] if len(result["targets"]) > 3 else result["targets"]
+                result["target_names"] = result["target_names"][3:] if len(result["target_names"]) > 3 else result["target_names"]
+                result["weld_boxes"] = [result["weld_boxes"][1]] if len(result["weld_boxes"]) > 1 else result["weld_boxes"]
+            
+            if "avoid" not in up and ("no obstacle" in up or "无障碍" in up or "忽略障碍" in up or "ignore obstacle" in up):
+                result["obstacles"] = []
+
         print(f"[VLM Local Mock] Dynamic CV detection complete: detected {len(result['targets'])} targets, {len(result['weld_boxes'])} weld/defect boxes, and {len(result['obstacles'])} obstacles.")
         return result
 
 
-def parse_image_gemini(image_path):
+def parse_image_gemini(image_path, user_prompt=None):
     """
     Calls Google Gemini 1.5 API with image input to detect welds and obstacles in pixel space.
     """
     if not config.GEMINI_API_KEY:
         print("[Warning] GEMINI_API_KEY is not configured. Fallback to Local Mock.")
-        return parse_image_local(image_path)
+        return parse_image_local(image_path, user_prompt)
 
     try:
         import google.generativeai as genai
@@ -200,7 +237,7 @@ def parse_image_gemini(image_path):
     except ImportError:
         print("[Warning] 'google-generativeai' or 'Pillow' is not installed. Fallback to Local Mock.")
         print("Install them using: pip install google-generativeai pillow")
-        return parse_image_local(image_path)
+        return parse_image_local(image_path, user_prompt)
 
     # Configure Gemini API
     genai.configure(api_key=config.GEMINI_API_KEY)
@@ -226,6 +263,8 @@ def parse_image_gemini(image_path):
       "obstacles": [[u_min, v_min, u_max, v_max], ...] // Obstacle bounding boxes in pixels
     }}
     """
+    if user_prompt:
+        prompt += f"\n\nUSER DIRECTIVE: Inspect only according to this natural language request: '{user_prompt}'."
 
     try:
         print(f"[VLM Gemini] Sending image '{image_path}' to Gemini API ({config.GEMINI_MODEL})...")
@@ -247,14 +286,14 @@ def parse_image_gemini(image_path):
         return data
     except Exception as e:
         print(f"[Error] Gemini VLM analysis failed: {e}. Fallback to Local Mock.")
-        return parse_image_local(image_path)
+        return parse_image_local(image_path, user_prompt)
 
 
-def parse_image(image_path):
+def parse_image(image_path, user_prompt=None):
     """
     Unified entry point for NDT image VLM analysis.
     """
     if config.LLM_MODE == "gemini":
-        return parse_image_gemini(image_path)
+        return parse_image_gemini(image_path, user_prompt)
     else:
-        return parse_image_local(image_path)
+        return parse_image_local(image_path, user_prompt)
