@@ -41,6 +41,87 @@ def serve_static(path):
 def serve_upload(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
+# Retrieve dataset structure
+@app.route('/api/dataset/list', methods=['GET'])
+def list_datasets():
+    data_dir = os.path.join(os.path.dirname(__file__), 'data')
+    if not os.path.exists(data_dir):
+        return jsonify({})
+    
+    structure = {}
+    for cls in sorted(os.listdir(data_dir)):
+        cls_path = os.path.join(data_dir, cls)
+        if not os.path.isdir(cls_path):
+            continue
+        
+        test_path = os.path.join(cls_path, 'test')
+        if not os.path.exists(test_path) or not os.path.isdir(test_path):
+            continue
+        
+        structure[cls] = {}
+        for cat in sorted(os.listdir(test_path)):
+            cat_path = os.path.join(test_path, cat)
+            if not os.path.isdir(cat_path):
+                continue
+            
+            images = [f for f in sorted(os.listdir(cat_path)) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            structure[cls][cat] = images
+            
+    return jsonify(structure)
+
+# Load a specific dataset image
+@app.route('/api/dataset/load', methods=['POST'])
+def load_dataset_image():
+    data = request.json or {}
+    cls = data.get('class')
+    category = data.get('category')
+    image_name = data.get('image')
+    
+    if not cls or not category or not image_name:
+        return jsonify({"error": "Missing class, category or image name"}), 400
+    
+    data_dir = os.path.join(os.path.dirname(__file__), 'data')
+    img_path = os.path.join(data_dir, cls, 'test', category, image_name)
+    
+    if not os.path.exists(img_path):
+        return jsonify({"error": f"Image {image_name} not found in {cls}/test/{category}"}), 404
+    
+    import shutil
+    secure_img_name = f"{cls}_{category}_{image_name}"
+    dest_img_path = os.path.join(app.config['UPLOAD_FOLDER'], secure_img_name)
+    shutil.copy(img_path, dest_img_path)
+    
+    # Look for matching ground truth mask
+    base_name, _ = os.path.splitext(image_name)
+    mask_name = f"{base_name}_mask.png"
+    mask_path = os.path.join(data_dir, cls, 'ground_truth', category, mask_name)
+    
+    dest_mask_url = None
+    if os.path.exists(mask_path):
+        secure_mask_name = f"{cls}_{category}_{base_name}_gt.png"
+        dest_mask_path = os.path.join(app.config['UPLOAD_FOLDER'], secure_mask_name)
+        shutil.copy(mask_path, dest_mask_path)
+        dest_mask_url = f"/uploads/{secure_mask_name}"
+        
+    from PIL import Image
+    try:
+        with Image.open(img_path) as img:
+            img_w, img_h = img.size
+    except Exception as e:
+        return jsonify({"error": f"Failed to open image file: {str(e)}"}), 400
+    
+    current_state["image_path"] = dest_img_path
+    current_state["width"] = img_w
+    current_state["height"] = img_h
+    
+    return jsonify({
+        "success": True,
+        "image_url": f"/uploads/{secure_img_name}",
+        "gt_url": dest_mask_url,
+        "width": img_w,
+        "height": img_h
+    })
+
 @app.route('/api/inspect', methods=['POST'])
 def inspect_image():
     if 'image' not in request.files:
@@ -56,7 +137,11 @@ def inspect_image():
                 shutil.copy(image_path, dest)
             filepath = image_path
         else:
-            return jsonify({"error": "No image file provided"}), 400
+            # Fallback to the currently loaded image (e.g. from dataset loader)
+            if current_state.get("image_path") and os.path.exists(current_state["image_path"]):
+                filepath = current_state["image_path"]
+            else:
+                return jsonify({"error": "No active NDT image loaded on the server"}), 400
     else:
         file = request.files['image']
         if file.filename == '':

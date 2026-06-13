@@ -23,3 +23,7 @@ metal_plate_gt.png
 .idea/
 *.swp
 *.swo
+
+# Large Datasets
+data/
+

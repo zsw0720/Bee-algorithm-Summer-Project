@@ -56,6 +56,25 @@
                         <input type="file" id="gt-input" accept="image/*">
                     </div>
 
+                    <!-- Preloaded Datasets Browser -->
+                    <div class="dataset-browser-container">
+                        <label class="gt-label"><i class="fa-solid fa-folder-open"></i> Or Choose Preloaded Dataset Image:</label>
+                        <div class="dataset-selectors">
+                            <select id="dataset-class" class="dataset-select">
+                                <option value="">-- Choose Class --</option>
+                            </select>
+                            <select id="dataset-category" class="dataset-select" disabled>
+                                <option value="">-- Choose Category --</option>
+                            </select>
+                            <select id="dataset-image" class="dataset-select" disabled>
+                                <option value="">-- Choose Image --</option>
+                            </select>
+                        </div>
+                        <button id="btn-load-dataset" class="btn-secondary btn-small" style="width: 100%; margin-top: 5px;" disabled>
+                            <i class="fa-solid fa-download"></i> Load Dataset Image
+                        </button>
+                    </div>
+
                     <div class="form-group">
                         <label for="vlm-mode">VLM Inspection Mode:</label>
                         <select id="vlm-mode">

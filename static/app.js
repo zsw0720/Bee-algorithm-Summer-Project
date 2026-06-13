@@ -129,18 +129,20 @@ btnInspect.addEventListener('click', () => runVisualDetection(false));
 btnDefaultInspect.addEventListener('click', () => runVisualDetection(true));
 
 function runVisualDetection(useDefault = false) {
-    if (!useDefault && !state.selectedImage) {
-        alert("Please select or drop an NDT photograph first!");
+    if (!useDefault && !state.selectedImage && !state.bgImage) {
+        alert("Please select, drop, or choose a preloaded dataset image first!");
         return;
     }
 
-    logToConsole(useDefault ? "Loading default plate metal_plate.png..." : "Uploading image for VLM visual inspection...", "system");
+    logToConsole(useDefault ? "Loading default plate metal_plate.png..." : (state.selectedImage ? "Uploading image for VLM visual inspection..." : "Requesting VLM visual inspection on loaded dataset image..."), "system");
     
     const formData = new FormData();
     if (!useDefault) {
-        formData.append('image', state.selectedImage);
-        if (state.selectedGT) {
-            formData.append('gt_mask', state.selectedGT);
+        if (state.selectedImage) {
+            formData.append('image', state.selectedImage);
+            if (state.selectedGT) {
+                formData.append('gt_mask', state.selectedGT);
+            }
         }
     } else {
         formData.append('use_default', 'true');
@@ -681,3 +683,133 @@ function renderConvergenceChart() {
         }
     });
 }
+
+// 7. Initialize Dataset Browser Panel
+let datasetStructure = {};
+function initDatasetBrowser() {
+    const classSelect = document.getElementById('dataset-class');
+    const catSelect = document.getElementById('dataset-category');
+    const imgSelect = document.getElementById('dataset-image');
+    const btnLoad = document.getElementById('btn-load-dataset');
+    
+    fetch('/api/dataset/list')
+        .then(res => res.json())
+        .then(data => {
+            datasetStructure = data;
+            
+            // Populate class dropdown
+            classSelect.innerHTML = '<option value="">-- Choose Class --</option>';
+            Object.keys(data).forEach(cls => {
+                const opt = document.createElement('option');
+                opt.value = cls;
+                opt.textContent = cls.replace('_', ' ').toUpperCase();
+                classSelect.appendChild(opt);
+            });
+        })
+        .catch(err => console.error("Failed to load dataset list:", err));
+        
+    // Change listener for Class
+    classSelect.addEventListener('change', () => {
+        const cls = classSelect.value;
+        catSelect.innerHTML = '<option value="">-- Choose Category --</option>';
+        imgSelect.innerHTML = '<option value="">-- Choose Image --</option>';
+        catSelect.disabled = true;
+        imgSelect.disabled = true;
+        btnLoad.disabled = true;
+        
+        if (cls && datasetStructure[cls]) {
+            catSelect.disabled = false;
+            Object.keys(datasetStructure[cls]).forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat.replace('_', ' ').toUpperCase();
+                catSelect.appendChild(opt);
+            });
+        }
+    });
+    
+    // Change listener for Category
+    catSelect.addEventListener('change', () => {
+        const cls = classSelect.value;
+        const cat = catSelect.value;
+        imgSelect.innerHTML = '<option value="">-- Choose Image --</option>';
+        imgSelect.disabled = true;
+        btnLoad.disabled = true;
+        
+        if (cls && cat && datasetStructure[cls][cat]) {
+            imgSelect.disabled = false;
+            datasetStructure[cls][cat].forEach(img => {
+                const opt = document.createElement('option');
+                opt.value = img;
+                opt.textContent = img;
+                imgSelect.appendChild(opt);
+            });
+        }
+    });
+    
+    // Change listener for Image
+    imgSelect.addEventListener('change', () => {
+        btnLoad.disabled = !imgSelect.value;
+    });
+    
+    // Click listener for Load button
+    btnLoad.addEventListener('click', () => {
+        const cls = classSelect.value;
+        const cat = catSelect.value;
+        const imgName = imgSelect.value;
+        
+        logToConsole(`Loading preloaded image: ${cls}/${cat}/${imgName}...`, 'system');
+        btnLoad.disabled = true;
+        
+        fetch('/api/dataset/load', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ class: cls, category: cat, image: imgName })
+        })
+        .then(res => res.json())
+        .then(data => {
+            btnLoad.disabled = false;
+            if (data.error) {
+                logToConsole(`Failed to load dataset image: ${data.error}`, 'warning');
+                alert(data.error);
+                return;
+            }
+            
+            // Set state variables
+            state.selectedImage = null; // Reset manually uploaded file state
+            state.selectedGT = null;
+            
+            // Hide uploaded file name displays
+            document.getElementById('file-name-display').style.display = 'none';
+            document.getElementById('file-name-text').textContent = 'None';
+            document.getElementById('gt-input').value = '';
+            
+            state.imgWidth = data.width;
+            state.imgHeight = data.height;
+            
+            // Load background image
+            const img = new Image();
+            img.onload = () => {
+                state.bgImage = img;
+                drawCanvas();
+                
+                // Clear previous features and paths
+                state.pixelTargets = [];
+                state.weldBoxes = [];
+                state.pixelObstacles = [];
+                document.getElementById('btn-plan').disabled = true;
+                updateMetrics(null); // Reset metrics card
+                
+                logToConsole(`Preloaded image loaded successfully. Ground truth mask: ${data.gt_url ? 'Auto-loaded' : 'None (Good sample)'}`, 'success');
+            };
+            img.src = data.image_url + "?t=" + new Date().getTime();
+        })
+        .catch(err => {
+            btnLoad.disabled = false;
+            logToConsole(`Network error loading dataset image: ${err.message}`, 'warning');
+        });
+    });
+}
+
+// Call dataset initialization on script run
+initDatasetBrowser();

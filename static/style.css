@@ -760,3 +760,46 @@ button {
     height: 150px;
     position: relative;
 }
+
+/* Preloaded Dataset Browser */
+.dataset-browser-container {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.dataset-selectors {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.dataset-select {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.4rem 0.5rem;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.dataset-select:focus {
+    border-color: var(--neon-cyan);
+}
+
+.dataset-select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-small {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.8rem;
+}
