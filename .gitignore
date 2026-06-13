@@ -27,3 +27,5 @@ metal_plate_gt.png
 # Large Datasets
 data/
 
+# PowerPoint
+*.pptx
