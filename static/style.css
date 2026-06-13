@@ -63,6 +63,49 @@ header {
     backdrop-filter: blur(12px);
 }
 
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.divider-vertical {
+    width: 1px;
+    height: 30px;
+    background: var(--border-color);
+}
+
+.uob-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.uob-crest {
+    font-size: 1.3rem;
+    color: #ffc72c; /* Official Birmingham Gold */
+    filter: drop-shadow(0 0 6px rgba(255, 199, 44, 0.4));
+}
+
+.uob-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+.uob-title {
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #ffc72c;
+}
+
+.uob-subtitle {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+}
+
 .logo {
     display: flex;
     align-items: center;
@@ -71,7 +114,7 @@ header {
 
 .logo h1 {
     font-family: var(--font-heading);
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 700;
 }
 
